@@ -1,62 +1,170 @@
 /**
  * Unit tests for the action's main functionality, src/main.js
- *
- * To mock dependencies in ESM, you can create fixtures that export mock
- * functions and objects. For example, the core module is mocked in this test,
- * so that the actual '@actions/core' module is not imported.
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
+
+// Mock @actions/exec
+const mockExec = jest.fn()
+const mockExecModule = { exec: mockExec }
+
+// Mock @actions/github
+const mockGithub = {
+  context: {
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    runId: 12345,
+    payload: {}
+  }
+}
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
+jest.unstable_mockModule('@actions/exec', () => mockExecModule)
+jest.unstable_mockModule('@actions/github', () => mockGithub)
 
-// The module being tested should be imported dynamically. This ensures that the
-// mocks are used in place of any actual dependencies.
+// The module being tested should be imported dynamically.
 const { run } = await import('../src/main.js')
 
 describe('main.js', () => {
   beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
-
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
-  })
-
-  afterEach(() => {
+    // Reset all mocks
     jest.resetAllMocks()
+
+    // Set default input values
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        project: 'test-project',
+        'benchmark-command': 'npm run benchmark',
+        token: 'test-token',
+        'repo-owner': '',
+        'repo-name': '',
+        'machine-name': '',
+        endpoint: '',
+        'repo-path': '',
+        'pr-number': '',
+        'github-run-id': ''
+      }
+      return inputs[name] || ''
+    })
+
+    // Mock successful exec calls
+    mockExec.mockResolvedValue(0)
   })
 
-  it('Sets the time output', async () => {
+  it('installs benchboard-cli and runs it with benchmark command', async () => {
     await run()
 
-    // Verify the time output was set.
-    expect(core.setOutput).toHaveBeenNthCalledWith(
-      1,
-      'time',
-      // Simple regex to match a time string in the format HH:MM:SS.
-      expect.stringMatching(/^\d{2}:\d{2}:\d{2}/)
+    // Verify benchboard-cli was installed
+    expect(mockExec).toHaveBeenCalledWith('npm', [
+      'install',
+      '-g',
+      'https://github.com/arashbm/benchboard-client.git'
+    ])
+
+    // Verify benchboard-cli was called with correct arguments
+    expect(mockExec).toHaveBeenCalledWith(
+      'benchboard-cli',
+      [
+        '--project',
+        'test-project',
+        '--repo-owner',
+        'test-owner',
+        '--repo-name',
+        'test-repo',
+        '--machine-name',
+        'github-actions',
+        '--repo-path',
+        '.',
+        '--endpoint',
+        'https://api.benchboard.com',
+        '--token',
+        'test-token',
+        '--github-run-id',
+        '12345',
+        '--',
+        'npm',
+        'run',
+        'benchmark'
+      ],
+      expect.any(Object)
+    )
+
+    // Verify success message
+    expect(core.info).toHaveBeenCalledWith(
+      'Successfully sent benchmark results to Benchboard!'
     )
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
-
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+  it('includes PR number when available', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        project: 'test-project',
+        'benchmark-command': 'npm run benchmark',
+        token: 'test-token',
+        'pr-number': '123'
+      }
+      return inputs[name] || ''
+    })
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds is not a number'
+    expect(mockExec).toHaveBeenCalledWith(
+      'benchboard-cli',
+      expect.arrayContaining(['--pr', '123']),
+      expect.any(Object)
+    )
+  })
+
+  it('handles exec errors and sets failed status', async () => {
+    const error = new Error('Installation failed')
+    mockExec.mockRejectedValueOnce(error)
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('Installation failed')
+  })
+
+  it('uses custom inputs when provided', async () => {
+    core.getInput.mockImplementation((name) => {
+      const inputs = {
+        project: 'custom-project',
+        'benchmark-command': 'python benchmark.py',
+        token: 'custom-token',
+        'repo-owner': 'custom-owner',
+        'repo-name': 'custom-repo',
+        'machine-name': 'custom-machine',
+        endpoint: 'https://custom.api.com',
+        'repo-path': '/custom/path'
+      }
+      return inputs[name] || ''
+    })
+
+    await run()
+
+    expect(mockExec).toHaveBeenCalledWith(
+      'benchboard-cli',
+      [
+        '--project',
+        'custom-project',
+        '--repo-owner',
+        'custom-owner',
+        '--repo-name',
+        'custom-repo',
+        '--machine-name',
+        'custom-machine',
+        '--repo-path',
+        '/custom/path',
+        '--endpoint',
+        'https://custom.api.com',
+        '--token',
+        'custom-token',
+        '--github-run-id',
+        '12345',
+        '--',
+        'python',
+        'benchmark.py'
+      ],
+      expect.any(Object)
     )
   })
 })
