@@ -1,23 +1,53 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: Benchboard Action
+description:
+  Run benchmarks and send results to Benchboard for performance tracking
+author: arashbm
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: trending-up
+  color: blue
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  project:
+    description: Project name
     required: true
-    default: '1000'
+  benchmark-command:
+    description: Benchmark command to run (should output JSON)
+    required: true
+  token:
+    description: Benchboard ingest token
+    required: true
+  repo-owner:
+    description: Repository owner
+    required: false
+  repo-name:
+    description: Repository name
+    required: false
+  machine-name:
+    description: Machine name identifier
+    required: false
+    default: 'github-actions'
+  endpoint:
+    description: Benchboard API endpoint URL
+    required: false
+    default: 'https://api.benchboard.com'
+  repo-path:
+    description: Path to git repository
+    required: false
+    default: '.'
+  pr-number:
+    description: Pull request number
+    required: false
+  github-run-id:
+    description: GitHub Actions run ID
+    required: false
 
 # Define your outputs here.
 outputs:
-  time:
-    description: Your output description here
+  benchboard-output:
+    description: Output from the benchboard-cli command
 
 runs:
   using: node24
