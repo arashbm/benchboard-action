@@ -1,14 +1,12 @@
-name: Benchboard Action
+name: Benchboard
 description:
   Run benchmarks and send results to Benchboard for performance tracking
 author: arashbm
 
-# Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
   icon: trending-up
   color: blue
 
-# Define your inputs here.
 inputs:
   project:
     description: Project name
@@ -22,9 +20,11 @@ inputs:
   repo-owner:
     description: Repository owner
     required: false
+    default: ${{ github.repository_owner }}
   repo-name:
     description: Repository name
     required: false
+    default: ${{ github.event.repository.name }}
   machine-name:
     description: Machine name identifier
     required: false
@@ -37,18 +37,30 @@ inputs:
     description: Path to git repository
     required: false
     default: '.'
-  pr-number:
-    description: Pull request number
-    required: false
   github-run-id:
     description: GitHub Actions run ID
     required: false
-
-# Define your outputs here.
-outputs:
-  benchboard-output:
-    description: Output from the benchboard-cli command
+    default: ${{ github.run_id }}
 
 runs:
-  using: node24
-  main: dist/index.js
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - run: npm install -g https://github.com/arashbm/benchboard-client
+      shell: bash
+
+    - run: >
+        benchboard-cli
+        --project ${{ inputs.project }}
+        --token ${{ inputs.token }}
+        --repo-owner ${{ inputs.repo-owner }}
+        --repo-name ${{ inputs.repo-name }}
+        --machine-name ${{ inputs.machine-name }}
+        --endpoint ${{ inputs.endpoint }}
+        --repo-path ${{ inputs.repo-path }}
+        --github-run-id ${{ inputs.github-run-id }}
+        -- ${{ inputs.benchmark-command }}
+      shell: bash
