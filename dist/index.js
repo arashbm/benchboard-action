@@ -31270,21 +31270,7 @@ async function run() {
       'https://github.com/arashbm/benchboard-client.git'
     ]);
 
-    coreExports.info('Running benchmark command...');
-
-    // Run the benchmark command and capture output
-    let benchmarkOutput = '';
-    const benchmarkOptions = {
-      listeners: {
-        stdout: (data) => {
-          benchmarkOutput += data.toString();
-        }
-      }
-    };
-
-    await execExports.exec(benchmarkCommand, [], benchmarkOptions);
-
-    coreExports.info('Running benchboard-cli...');
+    coreExports.info('Running benchboard-cli with benchmark command...');
 
     // Prepare benchboard-cli arguments
     const benchboardArgs = [
@@ -31314,10 +31300,13 @@ async function run() {
       benchboardArgs.push('--github-run-id', githubRunId.toString());
     }
 
-    // Run benchboard-cli with the benchmark output piped as input
+    // Add separator and benchmark command
+    benchboardArgs.push('--');
+    benchboardArgs.push(...benchmarkCommand.split(' '));
+
+    // Run benchboard-cli with the benchmark command as argument
     let benchboardOutput = '';
     const benchboardOptions = {
-      input: Buffer.from(benchmarkOutput),
       listeners: {
         stdout: (data) => {
           benchboardOutput += data.toString();
